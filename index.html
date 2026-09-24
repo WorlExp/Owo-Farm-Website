@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>OwO Self-bot Paneli</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, sans-serif;
+    background: #0f1115;
+    color: #e8e8e8;
+    margin: 0;
+    padding: 20px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  p.sub { color: #888; margin-top: 0; font-size: 14px; }
+  .card {
+    background: #171a21;
+    border: 1px solid #262b36;
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  label { display: block; font-size: 13px; margin-bottom: 6px; color: #aaa; }
+  input {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0f1115;
+    border: 1px solid #2b3140;
+    border-radius: 6px;
+    color: #eee;
+    font-family: monospace;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  button {
+    background: #5865f2;
+    color: #fff;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  button:hover { background: #4752c4; }
+  button.danger { background: #ed4245; }
+  button.danger:hover { background: #c03537; }
+  button.small { padding: 6px 10px; font-size: 12px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px;
+    border-bottom: 1px solid #262b36;
+  }
+  th { color: #888; font-weight: 500; }
+  .status { padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+  .status.ok { background: #1e3a25; color: #4ade80; }
+  .status.err { background: #3a1e1e; color: #f87171; }
+  .status.warn { background: #3a331e; color: #fbbf24; }
+  .msg { margin-top: 10px; font-size: 13px; }
+  .msg.ok { color: #4ade80; }
+  .msg.err { color: #f87171; }
+  .key-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .key-row input { margin: 0; flex: 1; }
+  code { background: #262b36; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>OwO Self-bot Paneli</h1>
+  <p class="sub">Token gir, hesap otomatik olarak OwO kasmaya başlar.</p>
+
+  <div class="card">
+    <label>Panel Şifresi</label>
+    <div class="key-row">
+      <input id="panelKey" type="password" placeholder="PANEL_KEY ortam değişkeni">
+      <button onclick="kaydetKey()">Kaydet</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;font-size:15px;">Hesap Ekle</h3>
+    <label>Token (kullanıcı token'ı — bot token'ı DEĞİL)</label>
+    <input id="token" type="password" placeholder="MTIzNDU2...">
+    <label>Kanal ID</label>
+    <input id="kanalId" placeholder="123456789012345678">
+    <button onclick="ekle()">Ekle ve Başlat</button>
+    <div id="addMsg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;font-size:15px;">Aktif Hesaplar</h3>
+      <button class="small" onclick="listele()">Yenile</button>
+    </div>
+    <table id="tablo" style="margin-top:12px;">
+      <thead>
+        <tr>
+          <th>Hesap</th>
+          <th>Kanal</th>
+          <th>Cooldown</th>
+          <th>Durum</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tabloBody">
+        <tr><td colspan="5" style="color:#666;">Yükleniyor...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function getKey() {
+  return localStorage.getItem('panelKey') || '';
+}
+
+function kaydetKey() {
+  localStorage.setItem('panelKey', $('panelKey').value.trim());
+  msg('addMsg', 'Şifre kaydedildi.', 'ok');
+  listele();
+}
+
+async function api(url, body) {
+  const opts = {
+    method: body ? 'POST' : 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-panel-key': getKey(),
+    },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  return await r.json();
+}
+
+function msg(id, text, cls) {
+  const el = $(id);
+  el.textContent = text;
+  el.className = 'msg ' + (cls || '');
+}
+
+async function ekle() {
+  const token = $('token').value.trim();
+  const kanalId = $('kanalId').value.trim();
+  if (!token || !kanalId) {
+    msg('addMsg', 'Token ve kanal ID gerekli.', 'err');
+    return;
+  }
+  msg('addMsg', 'Başlatılıyor...', '');
+  const r = await api('/api/add', { token, kanalId });
+  if (r.ok) {
+    msg('addMsg', 'Eklendi ve başlatıldı.', 'ok');
+    $('token').value = '';
+    listele();
+  } else {
+    msg('addMsg', 'Hata: ' + r.error, 'err');
+  }
+}
+
+async function kaldir(token) {
+  if (!confirm('Bu hesabı durdurmak istiyor musun?')) return;
+  await api('/api/remove', { token });
+  listele();
+}
+
+async function listele() {
+  const r = await api('/api/list');
+  const tbody = $('tabloBody');
+  if (!r.hesaplar || r.hesaplar.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:#666;">Aktif hesap yok.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  for (const h of r.hesaplar) {
+    const durumClass =
+      h.durum === 'çalışıyor' ? 'ok' :
+      h.durum === 'bağlanıyor' ? 'warn' : 'err';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${h.user || '...'}</td>
+      <td><code>${h.kanalId}</code></td>
+      <td>${h.cooldown}s</td>
+      <td><span class="status ${durumClass}">${h.durum}</span></td>
+      <td><button class="small danger" onclick="kaldir('${h.tokenTam}')">Durdur</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+$('panelKey').value = getKey();
+listele();
+setInterval(listele, 5000);
+</script>
+</body>
+</html>
